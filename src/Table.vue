@@ -13,17 +13,28 @@
       </div>
       <table>
         <thead>
-        <tr>
-          <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
-            {{ columnField.name }}
-          </th>
-        </tr>
+
           <tr v-for="(rowField, rowIndex) in selectedRowFields" :key="rowIndex">
+            <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
+              <tr v-if="rowIndex !== selectedRowFields.length - 1">
+
+              </tr>
+              <th v-else>
+                {{ selectedColumnFields[columnIndex].name }}
+              </th>
+            </th>
             <th>{{ rowField.name }} </th>
             <td v-for="(rowField, rowIndex1) in tableData.rows" :key="rowIndex1">
               <div class="row">{{ rowField[rowIndex] }}</div>
             </td>
           </tr>
+
+          <tr v-if="selectedRowFields.length === 0">
+            <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
+              {{ columnField.name }}
+            </th>
+          </tr>
+
         </thead>
         <tbody>
         <tr v-for="(columnField, columnIndex) in tableData.columns" :key="columnIndex">
@@ -240,6 +251,7 @@ table {
   border-collapse: collapse;
   margin-top: 10px;
   table-layout: fixed;
+  empty-cells: hide;
 }
 
 th, td {
