@@ -3,6 +3,18 @@
     <button @click="getMetaData">Запрос метаданных</button>
     <button @click="getFieldValues">Запрос значений полей</button>
     <button @click="getCube">Запрос куба</button>
+    <div>
+        Выберите метрику для добовляемого меню
+        <select v-model="selectedValue" id="selectMetric" name="selectBox">
+          <option value="COUNT">Количество</option>
+          <option value="COUNT_DISTINCT">Количество различных</option>
+          <option value="SUM">Сумма</option>
+          <option value="MAX">Максимум</option>
+          <option value="MIN">Минимум</option>
+          <option value="AVG">Среднее</option>
+          <option value="NONE"></option>
+        </select>
+      </div>
     <div v-if="loading">Загрузка...</div>
     <div>{{ data.message }}</div>
     <div v-if="data.success">
@@ -14,23 +26,42 @@
       <table>
         <thead>
         <tr>
-          <th v-for="(columnField, columnIndex) in tableData.columns" :key="columnIndex">
+          <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
             {{ columnField.name }}
           </th>
+          <th v-for="(metricField, metricIndex) in selectedMetrixFields" :key="metricIndex">
+            {{ metricField[0].name + ' ('+ tableData.metrics[metricIndex].aggregationType + ')'}}
+          </th>
         </tr>
+          <tr v-for="(rowField, rowIndex) in selectedRowFields" :key="rowIndex">
+            <th>{{ rowField.name }} </th>
+            <td v-for="(rowField, rowIndex1) in tableData.rows" :key="rowIndex1">
+              <div class="row">{{ rowField[rowIndex] }}</div>
+            </td>
+          </tr>
         </thead>
         <tbody>
-        <tr v-for="(rowData, rowIndex) in tableData.rows" :key="rowIndex">
-          <td v-for="(columnField, columnIndex) in tableData.columns" :key="columnIndex">
-            {{ rowData[columnIndex] }}
+        <tr v-for="(columnField, columnIndex) in tableData.columns" :key="columnIndex">
+          <td v-for="(field, fieldIndex) in columnField" :key="fieldIndex">
+            {{ field }}
+          </td>
+          <td v-for="(columnMetric, metricIndex) in tableData.metrics" :key="metricIndex">
+            {{ columnMetric.values[columnIndex][0] }}
           </td>
         </tr>
+
         </tbody>
       </table>
-      <!-- Контекстное меню -->
+      <!-- Контекстное меню  -->
       <div class="context-menu" v-if="contextMenu.visible" :style="{ top: contextMenu.top + 'px', left: contextMenu.left + 'px' }">
         <div @click="addColumn(contextMenu.field)">
           Добавить "{{ contextMenu.field.name }}" в таблицу как столбец
+        </div>
+        <div @click="addRow(contextMenu.field)">
+          Добавить "{{ contextMenu.field.name }}" в таблицу как строку
+        </div>
+        <div @click="Cancel()">
+          Отмена
         </div>
       </div>
     </div>
@@ -47,19 +78,21 @@
 </template>
 
 <script>
+    
 import axios from "axios";
 
 export default {
   name: 'query',
   data() {
-    return {
+    return {selectedValue: "NONE",
       data: {},
       loading: false,
       tableData: {
         columns: [],
-        rows: []
+        rows: [],
+        metrics: [],
       },
-      fields: [],
+      fields: {},
       contextMenu: {
         visible: false,
         top: 0,
@@ -74,8 +107,9 @@ export default {
         from: 0,
         count: 100
       },
-      columnValues: [],
-      rowValues: [],
+      selectedRowFields: [],
+      selectedColumnFields: [],
+      selectedMetrixFields: [],
     };
   },
   methods: {
@@ -108,31 +142,109 @@ export default {
     },
     getCube() {
       this.loading = true;
-      const request = {
-        columnFields: this.tableData.columns.map((column) => {
-          return {
-            fieldId: column.id,
-            fieldType: "REPORT_FIELD"
-          };
-        }),
-        rowFields: [],
-        columnsInterval: {
-          from: this.columnsInterval.from,
-          count: this.columnsInterval.count
-        },
-        rowsInterval: {
-          from: this.rowsInterval.from,
-          count: this.rowsInterval.count
-        },
-        columnSort: [],
-        rowSort: [],
-        allFields: []
-      };
+
+      // const request = (this.selectedValue !== "NONE"?{
+      //     columnFields: this.selectedColumnFields.map((field) => {
+      //       return {
+      //         fieldId: field.id,
+      //         fieldType: "REPORT_FIELD"
+      //       };
+      //     }),
+      //     rowFields: this.selectedRowFields.map((field) => {
+      //       return {
+      //         fieldId: field.id,
+      //         fieldType: "REPORT_FIELD"
+      //       };
+      //     }),
+      //       metrics: this.selectedMetrixFields.map((field) =>{
+      //         return {
+      //           field:{
+      //             fieldId: field.id,
+      //             fieldType: "REPORT_FIELD"
+      //           },
+      //           aggregationType: this.selectedValue
+      //         }
+      //       }),
+      //     columnsInterval: {
+      //       from: this.columnsInterval.from,
+      //       count: this.columnsInterval.count
+      //     },
+      //     rowsInterval: {
+      //       from: this.rowsInterval.from,
+      //       count: this.rowsInterval.count
+      //     },
+      //     columnSort: [],
+      //     rowSort: [],
+      //     allFields: []
+      //   }:{
+      //     columnFields: this.selectedColumnFields.map((field) => {
+      //       return {
+      //         fieldId: field.id,
+      //         fieldType: "REPORT_FIELD"
+      //       };
+      //     }),
+      //     rowFields: this.selectedRowFields.map((field) => {
+      //       return {
+      //         fieldId: field.id,
+      //         fieldType: "REPORT_FIELD"
+      //       };
+      //     }),
+      //     columnsInterval: {
+      //       from: this.columnsInterval.from,
+      //       count: this.columnsInterval.count
+      //     },
+      //     rowsInterval: {
+      //       from: this.rowsInterval.from,
+      //       count: this.rowsInterval.count
+      //     },
+      //     columnSort: [],
+      //     rowSort: [],
+      //     allFields: []
+      //   });
+        
+
+        const request = {
+          columnFields: this.selectedColumnFields.map((field) => {
+            return {
+              fieldId: field.id,
+              fieldType: "REPORT_FIELD"
+            };
+          }),
+          rowFields: this.selectedRowFields.map((field) => {
+            return {
+              fieldId: field.id,
+              fieldType: "REPORT_FIELD"
+            };
+          }),
+            metrics: this.selectedMetrixFields.map(([field, value]) =>{
+              return {
+                field:{
+                  fieldId: field.id,
+                  fieldType: "REPORT_FIELD"
+                },
+                aggregationType: value
+              }
+            }),
+          columnsInterval: {
+            from: this.columnsInterval.from,
+            count: this.columnsInterval.count
+          },
+          rowsInterval: {
+            from: this.rowsInterval.from,
+            count: this.rowsInterval.count
+          },
+          columnSort: [],
+          rowSort: [],
+          allFields: []
+        };
+
+      console.log(request);
       axios
           .post('/v1/olap/get-cube', request)
           .then((response) => {
-            this.tableData.rows = response.data.data.columnValues;
-            console.log(this.tableData)
+            this.tableData.columns = response.data.data.columnValues;
+            this.tableData.rows = response.data.data.rowValues;
+            this.tableData.metrics = response.data.data.metricValues;
           })
           .catch((error) => {
             console.error(error);
@@ -149,13 +261,30 @@ export default {
       this.contextMenu.visible = true;
     },
     addColumn(field) {
-      // Сортируем столбцы по полю "ordinal" перед добавлением
-      this.tableData.columns.push(field);
-      this.tableData.columns.sort((a, b) => a.ordinal - b.ordinal);
-
+      this.selectedColumnFields.push(field);
+      this.selectedColumnFields.sort((a, b) => a.ordinal - b.ordinal);
+      if(this.selectedValue !== "NONE")
+      {
+        this.selectedMetrixFields.push([field, this.selectedValue]);
+      }
+      //console.log(this.selectedMetrixFields);
       this.contextMenu.visible = false;
-      const fieldIndex = this.data.data.fields.findIndex(item => item.name === field.name);
+
+      const fieldIndex = this.fields.findIndex(item => item.name === field.name);
       this.fields.splice(fieldIndex, 1);
+
+      this.getCube();
+    },
+    addRow(field) {
+      this.selectedRowFields.push(field);
+      this.contextMenu.visible = false;
+      const fieldIndex = this.fields.findIndex(item => item.name === field.name);
+      this.fields.splice(fieldIndex, 1);
+
+      this.getCube();
+    },
+    Cancel() {
+      this.contextMenu.visible = false;
     },
   }
 }
@@ -207,25 +336,30 @@ body {
 table {
   border-collapse: collapse;
   margin-top: 10px;
-  width: 100%;
+  table-layout: fixed;
 }
 
 th, td {
   border: 1px solid #ccc;
   padding: 5px;
   text-align: center;
+  overflow: hidden;
 }
 
 th {
   background-color: lightgray;
   font-weight: bold;
+  width: 100px;
 }
 
 td {
   border: 1px solid #ccc;
   padding: 5px;
   text-align: center;
-  height: 100px;
   min-width: 100px;
+}
+
+tr td:first-child {
+  width: 200px;
 }
 </style>
