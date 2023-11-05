@@ -3,6 +3,18 @@
     <button @click="getMetaData">Запрос метаданных</button>
     <button @click="getFieldValues">Запрос значений полей</button>
     <button @click="getCube">Запрос куба</button>
+    <div>
+        Выберите метрику для добовляемого меню
+        <select v-model="selectedValue" id="selectMetric" name="selectBox">
+          <option value="COUNT">Количество</option>
+          <option value="COUNT_DISTINCT">Количество различных</option>
+          <option value="SUM">Сумма</option>
+          <option value="MAX">Максимум</option>
+          <option value="MIN">Минимум</option>
+          <option value="AVG">Среднее</option>
+          <option value="NONE"></option>
+        </select>
+      </div>
     <div v-if="loading">Загрузка...</div>
     <div>{{ data.message }}</div>
     <div v-if="data.success">
@@ -18,7 +30,7 @@
             {{ columnField.name }}
           </th>
           <th v-for="(metricField, metricIndex) in selectedMetrixFields" :key="metricIndex">
-            {{ metricField.name + " ("+ tableData.metrics[metricIndex].aggregationType + ")"}}
+            {{ metricField[0].name + ' ('+ tableData.metrics[metricIndex].aggregationType + ')'}}
           </th>
         </tr>
           <tr v-for="(rowField, rowIndex) in selectedRowFields" :key="rowIndex">
@@ -41,18 +53,6 @@
         </tbody>
       </table>
       <!-- Контекстное меню  -->
-      <div>
-        Выберите метрику для добовляемого меню
-        <select id="selectMetric" name="selectBox">
-          <option value="None"></option>
-          <option value="COUNT">Количество</option>
-          <option value="COUNT_DISTINCT">Количество различных</option>
-          <option value="SUM">Смма</option>
-          <option value="MAX">Максимум</option>
-          <option value="MIN">Минимум</option>
-          <option value="AVG">Среднее</option>
-        </select>
-      </div>
       <div class="context-menu" v-if="contextMenu.visible" :style="{ top: contextMenu.top + 'px', left: contextMenu.left + 'px' }">
         <div @click="addColumn(contextMenu.field)">
           Добавить "{{ contextMenu.field.name }}" в таблицу как столбец
@@ -78,12 +78,13 @@
 </template>
 
 <script>
+    
 import axios from "axios";
 
 export default {
   name: 'query',
   data() {
-    return {
+    return {selectedValue: "NONE",
       data: {},
       loading: false,
       tableData: {
@@ -141,42 +142,102 @@ export default {
     },
     getCube() {
       this.loading = true;
-      //const selection = document.getElementById(selectMetric)
-      const request = {
-        columnFields: this.selectedColumnFields.map((field) => {
-          return {
-            fieldId: field.id,
-            fieldType: "REPORT_FIELD"
-          };
-        }),
-        rowFields: this.selectedRowFields.map((field) => {
-          return {
-            fieldId: field.id,
-            fieldType: "REPORT_FIELD"
-          };
-        }),
-        metrics: this.selectedMetrixFields.map((field) =>{
-          return {
-            field:{
+
+      // const request = (this.selectedValue !== "NONE"?{
+      //     columnFields: this.selectedColumnFields.map((field) => {
+      //       return {
+      //         fieldId: field.id,
+      //         fieldType: "REPORT_FIELD"
+      //       };
+      //     }),
+      //     rowFields: this.selectedRowFields.map((field) => {
+      //       return {
+      //         fieldId: field.id,
+      //         fieldType: "REPORT_FIELD"
+      //       };
+      //     }),
+      //       metrics: this.selectedMetrixFields.map((field) =>{
+      //         return {
+      //           field:{
+      //             fieldId: field.id,
+      //             fieldType: "REPORT_FIELD"
+      //           },
+      //           aggregationType: this.selectedValue
+      //         }
+      //       }),
+      //     columnsInterval: {
+      //       from: this.columnsInterval.from,
+      //       count: this.columnsInterval.count
+      //     },
+      //     rowsInterval: {
+      //       from: this.rowsInterval.from,
+      //       count: this.rowsInterval.count
+      //     },
+      //     columnSort: [],
+      //     rowSort: [],
+      //     allFields: []
+      //   }:{
+      //     columnFields: this.selectedColumnFields.map((field) => {
+      //       return {
+      //         fieldId: field.id,
+      //         fieldType: "REPORT_FIELD"
+      //       };
+      //     }),
+      //     rowFields: this.selectedRowFields.map((field) => {
+      //       return {
+      //         fieldId: field.id,
+      //         fieldType: "REPORT_FIELD"
+      //       };
+      //     }),
+      //     columnsInterval: {
+      //       from: this.columnsInterval.from,
+      //       count: this.columnsInterval.count
+      //     },
+      //     rowsInterval: {
+      //       from: this.rowsInterval.from,
+      //       count: this.rowsInterval.count
+      //     },
+      //     columnSort: [],
+      //     rowSort: [],
+      //     allFields: []
+      //   });
+        
+
+        const request = {
+          columnFields: this.selectedColumnFields.map((field) => {
+            return {
               fieldId: field.id,
               fieldType: "REPORT_FIELD"
-            },
-            //aggregationType: selection.value
-            aggregationType: "MAX"
-          }
-        }),
-        columnsInterval: {
-          from: this.columnsInterval.from,
-          count: this.columnsInterval.count
-        },
-        rowsInterval: {
-          from: this.rowsInterval.from,
-          count: this.rowsInterval.count
-        },
-        columnSort: [],
-        rowSort: [],
-        allFields: []
-      };
+            };
+          }),
+          rowFields: this.selectedRowFields.map((field) => {
+            return {
+              fieldId: field.id,
+              fieldType: "REPORT_FIELD"
+            };
+          }),
+            metrics: this.selectedMetrixFields.map(([field, value]) =>{
+              return {
+                field:{
+                  fieldId: field.id,
+                  fieldType: "REPORT_FIELD"
+                },
+                aggregationType: value
+              }
+            }),
+          columnsInterval: {
+            from: this.columnsInterval.from,
+            count: this.columnsInterval.count
+          },
+          rowsInterval: {
+            from: this.rowsInterval.from,
+            count: this.rowsInterval.count
+          },
+          columnSort: [],
+          rowSort: [],
+          allFields: []
+        };
+
       console.log(request);
       axios
           .post('/v1/olap/get-cube', request)
@@ -184,7 +245,6 @@ export default {
             this.tableData.columns = response.data.data.columnValues;
             this.tableData.rows = response.data.data.rowValues;
             this.tableData.metrics = response.data.data.metricValues;
-            console.log(this.tableData)
           })
           .catch((error) => {
             console.error(error);
@@ -203,8 +263,11 @@ export default {
     addColumn(field) {
       this.selectedColumnFields.push(field);
       this.selectedColumnFields.sort((a, b) => a.ordinal - b.ordinal);
-      this.selectedMetrixFields.push(field);
-      console.log(this.selectedMetrixFields);
+      if(this.selectedValue !== "NONE")
+      {
+        this.selectedMetrixFields.push([field, this.selectedValue]);
+      }
+      //console.log(this.selectedMetrixFields);
       this.contextMenu.visible = false;
 
       const fieldIndex = this.fields.findIndex(item => item.name === field.name);
@@ -214,9 +277,7 @@ export default {
     },
     addRow(field) {
       this.selectedRowFields.push(field);
-      this.selectedMetrixFields.push(field);
       this.contextMenu.visible = false;
-
       const fieldIndex = this.fields.findIndex(item => item.name === field.name);
       this.fields.splice(fieldIndex, 1);
 
@@ -224,7 +285,7 @@ export default {
     },
     Cancel() {
       this.contextMenu.visible = false;
-    }
+    },
   }
 }
 </script>
