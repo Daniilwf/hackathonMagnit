@@ -23,8 +23,34 @@
           {{ field.name }}
         </div>
       </div>
+      <div>Строки:</div>
+      <div class="field-names">
+        <div v-for="(field, index) in selectedColumnFields" :key="index" class="field-name" @contextmenu.prevent="showContextMenu($event, field)" :title="field.description">
+          <span @click="closeColumnField(index)" class="close-icon">✖</span>
+          {{ field.name }}
+        </div>
+      </div>
+      <div>Столбцы:</div>
+      <div class="field-names">
+        <div v-for="(field, index) in selectedRowFields" :key="index" class="field-name" :title="field.description">
+          <span @click="closeRowField(index)" class="close-icon">✖</span>
+          {{ field.name }}
+        </div>
+      </div>
+
       <table>
         <thead>
+ <!--  Вывод без метрик    -->
+          <tr v-for="(rowField, rowIndex) in selectedRowFields" :key="rowIndex">
+            <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
+              <tr v-if="rowIndex !== selectedRowFields.length - 1">
+              </tr>
+              <th v-else>
+                {{ selectedColumnFields[columnIndex].name }}
+              </th>
+            </th>
+            <th @click="">{{ rowField.name }} </th>
+    <!--  Вывод метрик    -->
         <tr>
           <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
             {{ columnField.name }}
@@ -39,6 +65,12 @@
               <div class="row">{{ rowField[rowIndex] }}</div>
             </td>
           </tr>
+
+          <tr v-if="selectedRowFields.length === 0">
+            <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
+              {{ columnField.name }}
+            </th>
+          </tr>
         </thead>
         <tbody>
         <tr v-for="(columnField, columnIndex) in tableData.columns" :key="columnIndex">
@@ -47,23 +79,60 @@
           </td>
           <td v-for="(columnMetric, metricIndex) in tableData.metrics" :key="metricIndex">
             {{ columnMetric.values[columnIndex][0] }}
+
           </td>
         </tr>
 
         </tbody>
       </table>
-      <!-- Контекстное меню  -->
-      <div class="context-menu" v-if="contextMenu.visible" :style="{ top: contextMenu.top + 'px', left: contextMenu.left + 'px' }">
+      <!-- Контекстное меню -->
+      <div class="context-menu" v-if="contextMenu.visible && !contextFilterMenu.visible" :style="{ top: contextMenu.top + 'px', left: contextMenu.left + 'px' }">
         <div @click="addColumn(contextMenu.field)">
           Добавить "{{ contextMenu.field.name }}" в таблицу как столбец
         </div>
         <div @click="addRow(contextMenu.field)">
           Добавить "{{ contextMenu.field.name }}" в таблицу как строку
         </div>
+        <div @click="addFilter(contextMenu.field)">
+          Добавить к "{{ contextMenu.field.name }}" фильтр
+        </div>
         <div @click="Cancel()">
           Отмена
         </div>
       </div>
+      <div class="context-menu" v-if="contextFilterMenu.visible" :style="{ top: contextFilterMenu.top + 'px', left: contextFilterMenu.left + 'px' }">
+        <b style="font-weight: bold">Действия с группой фильтров</b>
+        <div @click="changeOperationType()">
+          Установить тип операций в группе. На данный момент {{this.filterGroup.operationType}}
+        </div>
+        <div @click="changeInvertResultGroup()">
+          Инвертировать результат для всех отфильрованных полей. На данный момент {{this.filterGroup.invertResult}}
+        </div>
+        <div @click="changeInvertResult()">
+          Инвертировать результат для этого поля. На данный момент {{this.filter.invertResult}}
+        </div>
+        <div @click="addColumn(contextFilterMenu.field)" @mouseenter="showFilterMenu" @mouseleave="hideFilterMenu">
+          Установит тип фильтра. На данный момент {{this.filter.filterType}}
+        </div>
+        <div @click.left="incrementRounding()" @click.right="decrementRounding()">
+          Установить количество знаков после запятой при округлении. На данный момент {{this.filter.rounding}}
+        </div>
+        <div @click="changeCanRounding()" >
+          Осуществлять ли округление значений? На данный момент {{this.filter.canRounding}}
+        </div>
+        <div @click="applyFilter(contextMenu.field, true)">
+          Применить фильтр
+        </div>
+        <div @click="CancelFilter()">
+          Отмена
+      </div>
+      </div>
+      <div class="context-menu" v-if="contextFilterOperationTypeMenu.visible" :style="{ top: contextFilterOperationTypeMenu.top + 'px', left: contextFilterOperationTypeMenu.left + 'px' }" @mouseenter="showFilterMenu" @mouseleave="hideFilterMenu">
+        <div v-for="operation in filterOperations" :key="operation" @click="setOperation(operation)">
+          {{ operation }}
+        </div>
+      </div>
+
     </div>
     <div>
       <label for="columnsInterval">Columns Interval:</label>
@@ -99,6 +168,18 @@ export default {
         left: 0,
         field: null,
       },
+      contextFilterMenu: {
+        visible: false,
+        top: 0,
+        left: 0,
+        field: null,
+      },
+      contextFilterOperationTypeMenu: {
+        visible: false,
+        top: 0,
+        left: 0,
+        field: null,
+      },
       columnsInterval: {
         from: 0,
         count: 100
@@ -109,6 +190,37 @@ export default {
       },
       selectedRowFields: [],
       selectedColumnFields: [],
+      filterGroup: {
+        operationType: "AND",
+        invertResult: false,
+        childGroups: [],
+        filters: [],
+        allFields: []
+      },
+      filter: {
+        field: {
+          fieldId: 0,
+          fieldType: "REPORT_FIELD",
+        },
+        filterType: "EMPTY",
+        invertResult: true,
+        rounding: 0,
+        canRounding: true,
+        values: []
+      },
+      filterOperations: [
+        'EMPTY',
+        'IN_LIST',
+        'CONTAINS_CS',
+        'CONTAINS_CI',
+        'EQUALS',
+        'GREATER',
+        'LESSER',
+        'GREATER_OR_EQUALS',
+        'LESSER_OR_EQUALS',
+        'BETWEEN',
+        'BLANK'
+      ],
       selectedMetrixFields: [],
     };
   },
@@ -142,67 +254,6 @@ export default {
     },
     getCube() {
       this.loading = true;
-
-      // const request = (this.selectedValue !== "NONE"?{
-      //     columnFields: this.selectedColumnFields.map((field) => {
-      //       return {
-      //         fieldId: field.id,
-      //         fieldType: "REPORT_FIELD"
-      //       };
-      //     }),
-      //     rowFields: this.selectedRowFields.map((field) => {
-      //       return {
-      //         fieldId: field.id,
-      //         fieldType: "REPORT_FIELD"
-      //       };
-      //     }),
-      //       metrics: this.selectedMetrixFields.map((field) =>{
-      //         return {
-      //           field:{
-      //             fieldId: field.id,
-      //             fieldType: "REPORT_FIELD"
-      //           },
-      //           aggregationType: this.selectedValue
-      //         }
-      //       }),
-      //     columnsInterval: {
-      //       from: this.columnsInterval.from,
-      //       count: this.columnsInterval.count
-      //     },
-      //     rowsInterval: {
-      //       from: this.rowsInterval.from,
-      //       count: this.rowsInterval.count
-      //     },
-      //     columnSort: [],
-      //     rowSort: [],
-      //     allFields: []
-      //   }:{
-      //     columnFields: this.selectedColumnFields.map((field) => {
-      //       return {
-      //         fieldId: field.id,
-      //         fieldType: "REPORT_FIELD"
-      //       };
-      //     }),
-      //     rowFields: this.selectedRowFields.map((field) => {
-      //       return {
-      //         fieldId: field.id,
-      //         fieldType: "REPORT_FIELD"
-      //       };
-      //     }),
-      //     columnsInterval: {
-      //       from: this.columnsInterval.from,
-      //       count: this.columnsInterval.count
-      //     },
-      //     rowsInterval: {
-      //       from: this.rowsInterval.from,
-      //       count: this.rowsInterval.count
-      //     },
-      //     columnSort: [],
-      //     rowSort: [],
-      //     allFields: []
-      //   });
-        
-
         const request = {
           columnFields: this.selectedColumnFields.map((field) => {
             return {
@@ -225,6 +276,7 @@ export default {
                 aggregationType: value
               }
             }),
+            filterGroup: this.filterGroup,
           columnsInterval: {
             from: this.columnsInterval.from,
             count: this.columnsInterval.count
@@ -237,13 +289,13 @@ export default {
           rowSort: [],
           allFields: []
         };
-
       console.log(request);
       axios
           .post('/v1/olap/get-cube', request)
           .then((response) => {
             this.tableData.columns = response.data.data.columnValues;
             this.tableData.rows = response.data.data.rowValues;
+            console.log(this.tableData)
             this.tableData.metrics = response.data.data.metricValues;
           })
           .catch((error) => {
@@ -272,7 +324,6 @@ export default {
 
       const fieldIndex = this.fields.findIndex(item => item.name === field.name);
       this.fields.splice(fieldIndex, 1);
-
       this.getCube();
     },
     addRow(field) {
@@ -283,9 +334,77 @@ export default {
 
       this.getCube();
     },
+    addFilter(event, field) {
+      this.contextMenu.visible = false;
+
+      this.contextFilterMenu.top = event.clientY;
+      this.contextFilterMenu.left = event.clientX;
+      this.contextFilterMenu.field = field;
+      this.contextFilterMenu.visible = true;
+    },
     Cancel() {
       this.contextMenu.visible = false;
     },
+    closeColumnField(index) {
+      this.fields.push(this.selectedColumnFields[index]);
+      this.fields.sort((a, b) => a.ordinal - b.ordinal);
+      this.selectedColumnFields.splice(index, 1);
+      this.getCube();
+    },
+    closeRowField(index) {
+      this.fields.push(this.selectedRowFields[index]);
+      this.fields.sort((a, b) => a.ordinal - b.ordinal);
+      this.selectedRowFields.splice(index, 1);
+      this.getCube();
+    },
+    showFilterMenu() {
+      this.contextFilterOperationTypeMenu.visible = true;
+    },
+    hideFilterMenu() {
+      this.contextFilterOperationTypeMenu.visible = false;
+    },
+    setOperation(operation) {
+      this.filter.filterType = operation;
+      this.hideFilterMenu();
+    },
+    changeOperationType() {
+      this.filterGroup.operationType = this.filterGroup.operationType === "AND" ? "OR" : "AND";
+    Cancel() {
+      this.contextMenu.visible = false;
+    },
+    changeInvertResultGroup() {
+      this.filterGroup.invertResult = this.filterGroup.invertResult !== true;
+    },
+    changeInvertResult() {
+      this.filter.invertResult = this.filter.invertResult !== true;
+    },
+    changeCanRounding() {
+      this.filter.canRounding = this.filter.canRounding !== true;
+    },
+    incrementRounding() {
+      this.filter.rounding++;
+    },
+    decrementRounding() {
+      if (this.filter.rounding > 0) {
+        this.filter.rounding--;
+      }
+    },
+    CancelFilter() {
+      this.contextFilterMenu.visible = false;
+    },
+    applyFilter(field, isColumn) {
+      if (isColumn) {
+        const fieldIndex = this.selectedColumnFields.findIndex(item => item.name === field.name);
+        if (fieldIndex !== -1) {
+          this.filter.values = this.tableData.columns.map(column => column[fieldIndex]);
+        }
+        this.filter.field.fieldId = field.id;
+        this.filterGroup.filters.push(this.filter);
+        this.filterGroup.allFields.push({fieldId: field.id, fieldType: "REPORT_FIELD"});
+      }
+      this.contextFilterMenu.visible = false;
+      this.getCube();
+    }
   }
 }
 </script>
@@ -293,17 +412,6 @@ export default {
 <style>
 .field-names {
   display: flex;
-}
-
-.field-name {
-  flex: 0 0 125px;
-  height: 100px;
-  text-align: center;
-  border: 1px solid #ccc;
-  margin: 5px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 body {
@@ -337,6 +445,7 @@ table {
   border-collapse: collapse;
   margin-top: 10px;
   table-layout: fixed;
+  empty-cells: hide;
 }
 
 th, td {
@@ -362,4 +471,26 @@ td {
 tr td:first-child {
   width: 200px;
 }
+
+.field-name {
+  flex: 0 0 125px;
+  height: 100px;
+  text-align: center;
+  border: 1px solid #ccc;
+  margin: 5px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.close-icon {
+  position: absolute;
+  top: 5px; /* Подстройте положение по вертикали по вашему усмотрению */
+  right: 5px; /* Подстройте положение по горизонтали по вашему усмотрению */
+  cursor: pointer;
+  font-size: 18px; /* Подстройте размер шрифта по вашему усмотрению */
+  color: red; /* Цвет иконки закрытия */
+}
+
 </style>
