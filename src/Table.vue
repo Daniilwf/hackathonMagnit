@@ -1,7 +1,6 @@
 <template>
   <div class="container">
     <button @click="getMetaData">Запрос метаданных</button>
-    <button @click="getFieldValues">Запрос значений полей</button>
     <button @click="getCube">Запрос куба</button>
     <button @click="changeMetricPlacement">Поменять расположение метрик</button>
     <div v-if="loading">Загрузка...</div>
@@ -12,73 +11,102 @@
           {{ field.name }}
         </div>
       </div>
-      <div>Строки:</div>
+      <div>Столбцы:</div>
       <div class="field-names">
         <div v-for="(field, index) in selectedColumnFields" :key="index" class="field-name" @contextmenu.prevent="showContextMenu($event, field)" :title="field.description">
           <span @click="closeColumnField(index)" class="close-icon">✖</span>
           {{ field.name }}
         </div>
       </div>
-      <div>Столбцы:</div>
+      <div>Строки:</div>
       <div class="field-names">
-        <div v-for="(field, index) in selectedRowFields" :key="index" class="field-name" :title="field.description">
+        <div v-for="(field, index) in selectedRowFields" :key="index" class="field-name" @contextmenu.prevent="showContextMenu($event, field)" :title="field.description">
           <span @click="closeRowField(index)" class="close-icon">✖</span>
           {{ field.name }}
+        </div>
+      </div>
+      <div>Метрики:</div>
+      <div class="field-names">
+        <div v-for="(field, index) in selectedMetricsFields" :key="index" class="field-name" :title="field.description">
+          <span @click="closeMetrixField(index)" class="close-icon">✖</span>
+          {{ field[0].name + ' ('+ tableData.metrics[index].aggregationType + ')' }}
         </div>
       </div>
 
       <table>
         <thead>
+        <!-- Если нет метрик -->
+        <tr v-if="(selectedMetricsFields.length === 0) && (metricPlacement === 'COLUMNS')" v-for="(rowField, rowIndex) in selectedRowFields" :key="rowIndex">
+          <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
+            <tr v-if="rowIndex !== selectedRowFields.length - 1"></tr>
+            <th v-else @click="changeColumnSort">
+              {{ columnField.name }}
+            </th>
+          </th>
+          <th @click="changeRowSort">{{ rowField.name }} </th>
+          <td v-for="(rowField, rowIndex1) in tableData.rows" :key="rowIndex1">
+            <div class="row">{{ rowField[rowIndex] }}</div>
+          </td>
+        </tr>
           <!-- Если нет метрик -->
           <tr v-if="metricPlacement === 'ROWS'" v-for="(rowField, rowIndex) in selectedRowFields" :key="rowIndex">
             <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
-              <th v-if="rowIndex !== selectedRowFields.length - 1"></th>
-              <th v-else>
+              <div v-if="rowIndex !== selectedRowFields.length - 1"></div>
+              <div v-else style="font-weight: bold" @click="changeColumnSort">
                 {{ columnField.name }}
-              </th>
+              </div>
             </th>
-            <th>{{ rowField.name }} </th>
+            <th @click="changeRowSort">{{ rowField.name }} </th>
               <td v-for="(rowField, rowIndex1) in tableData.rows" :key="rowIndex1" class="row">
                 {{ rowField[rowIndex] }}
               </td>
           </tr>
+          <template v-if="(metricPlacement === 'COLUMNS') && (selectedMetricsFields.length !== 0)">
+            <tr  v-for="(rowField, rowIndex) in selectedRowFields" :key="rowIndex">
+              <th v-for="columnIndex in (selectedColumnFields.length - 1)" :key="columnIndex">
+              </th>
+              <th @click="changeRowSort">{{ rowField.name }} </th>
+              <td v-for="(rowField, rowIndex1) in tableData.rows" :key="rowIndex1" class="row">
+                {{ rowField[rowIndex] }}
+              </td>
+            </tr>
+            <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex" @click="changeColumnSort">
+              {{ columnField.name }}
+            </th>
+            <th v-for="(rowField, rowIndex) in tableData.rows" :key="rowIndex">
+              <th v-for="(metricsField, metricsIndex) in selectedMetricsFields" :key="metricsIndex">
+                {{ metricsField[0].name + ' ('+ tableData.metrics[metricsIndex].aggregationType + ')'}}
+              </th>
+            </th>
+          </template>
           <!-- Если данные у нас по столбцам -->
            <tr v-if="(selectedRowFields.length === 0)">
-               <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
+               <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex" @click="changeColumnSort">
                  {{ columnField.name }}
                </th>
-               <th  v-if="metricPlacement === 'COLUMNS'" v-for="(metricField, metricIndex) in selectedMetrixFields" :key="metricIndex">
+               <th v-if="(metricPlacement === 'COLUMNS') && (selectedMetricsFields.length !== 0)" v-for="(metricField, metricIndex) in selectedMetricsFields" :key="metricIndex">
                   {{ metricField[0].name + ' ('+ tableData.metrics[metricIndex].aggregationType + ')'}}
                </th>
            </tr>
-          <!-- Если нет метрик -->
-          <tr v-if="metricPlacement === 'COLUMNS'" v-for="(rowField, rowIndex) in selectedRowFields" :key="rowIndex">
-            <th v-for="(columnField, columnIndex) in selectedColumnFields" :key="columnIndex">
-              <tr v-if="rowIndex !== selectedRowFields.length - 1"></tr>
-              <th v-else>
-                {{ columnField.name }}
-              </th>
-            </th>
-            <th @click="">{{ rowField.name }} </th>
-            <td v-for="(rowField, rowIndex1) in tableData.rows" :key="rowIndex1">
-              <div class="row">{{ rowField[rowIndex] }}</div>
-            </td>
-          </tr>
         </thead>
         <tbody>
         <tr v-for="(columnField, columnIndex) in tableData.columns" :key="columnIndex">
           <td v-for="(field, fieldIndex) in columnField" :key="fieldIndex">
             {{ field }}
           </td>
-          <tr  v-if="metricPlacement === 'ROWS'" v-for="(metricField, metricIndex) in selectedMetrixFields" :key="metricIndex">
+          <tr v-if="(metricPlacement === 'ROWS') && (selectedMetricsFields.length !== 0)" v-for="(metricField, metricIndex) in selectedMetricsFields" :key="metricIndex">
             <th>{{ metricField[0].name + ' ('+ tableData.metrics[metricIndex].aggregationType + ')'}}</th>
             <td v-for="(metricField, metricIndex) in tableData.metrics[metricIndex].values[columnIndex]"> {{ metricField }}</td>
           </tr>
-          <td v-if="metricPlacement === 'COLUMNS'" v-for="(columnMetric, metricIndex) in tableData.metrics" :key="metricIndex">
-            {{ columnMetric.values[columnIndex][0] }}
+          <td v-if="(metricPlacement === 'COLUMNS') && (selectedMetricsFields.length !== 0)" v-for="rowsIndex in tableData.rows.length" :key="rowsIndex">
+            <td v-for="metricIndex in  tableData.metrics.length" :key="metricIndex">
+              <div v-if="tableData.metrics[metricIndex] && tableData.metrics[metricIndex].values[rowsIndex] && tableData.metrics[metricIndex].values[rowsIndex][columnIndex]">
+                {{ tableData.metrics[metricIndex].values[rowsIndex][columnIndex] }}
+              </div>
+
+            </td>
           </td>
         </tr>
-
         </tbody>
       </table>
       <!-- Контекстное меню -->
@@ -97,7 +125,7 @@
             {{ operation }}
           </div>
         </div>
-        <div @click="addFilter(contextMenu.field)">
+        <div v-if="!alreadySelected(contextMenu.field)" @click="addFilter(contextMenu.field)">
           Добавить к "{{ contextMenu.field.name }}" фильтр
         </div>
         <div @click="Cancel()">
@@ -121,6 +149,9 @@
         <div class="context-menu" v-if="contextFilterOperationTypeMenu.visible" :style="{ top: contextFilterOperationTypeMenu.top + 'px', left: contextFilterOperationTypeMenu.left + 'px' }" @mouseenter="showFilterMenu" @mouseleave="hideFilterMenu">
           <div v-for="operation in filterOperations" :key="operation" @click="setFilterOperation(operation)">
             {{ operation }}
+          </div>
+          <div v-if="filter.filterType === 'EQUALS'">
+            <input type="text" v-model="valueForFilter" placeholder="Введите значение">
           </div>
         </div>
         <div @click.left="incrementRounding()" @click.right="decrementRounding()">
@@ -165,7 +196,7 @@ export default {
         metrics: [],
       },
       fields: {},
-      metricPlacement: 'COLUMNS',
+      metricPlacement: 'ROWS',
       contextMenu: {
         visible: false,
         top: 0,
@@ -239,7 +270,10 @@ export default {
         'BETWEEN',
         'BLANK'
       ],
-      selectedMetrixFields: [],
+      selectedMetricsFields: [],
+      columnSort: "Ascending",
+      rowSort: "Ascending",
+      valueForFilter: ""
     };
   },
   methods: {
@@ -249,19 +283,6 @@ export default {
           .then(response => {
             this.data = response.data;
             this.fields = this.data.data.fields;
-          })
-          .catch(error => {
-            console.error(error);
-          })
-          .finally(() => {
-            this.loading = false;
-          });
-    },
-    getFieldValues() {
-      this.loading = true;
-      axios.post('/v1/olap/get-field-values', {})
-          .then(response => {
-            this.data = response.data;
           })
           .catch(error => {
             console.error(error);
@@ -285,7 +306,7 @@ export default {
               fieldType: "REPORT_FIELD"
             };
           }),
-          metrics: this.selectedMetrixFields.map(([field, value]) =>{
+          metrics: this.selectedMetricsFields.map(([field, value]) =>{
             return {
               field:{
                 fieldId: field.id,
@@ -304,8 +325,20 @@ export default {
             from: this.rowsInterval.from,
             count: this.rowsInterval.count
           },
-          columnSort: [],
-          rowSort: [],
+          columnSort: [
+            // {
+            //   order: this.columnSort,
+            //   tuple: [],
+            //   metricId: 0
+            // }
+          ],
+          rowSort: [
+            // {
+            //   order: this.rowSort,
+            //   tuple: [],
+            //   metricId: 0
+            // }
+          ],
           allFields: []
         };
       console.log(request);
@@ -324,6 +357,12 @@ export default {
             this.loading = false;
           });
     },
+    alreadySelected(field) {
+     const rowIndex = this.selectedRowFields.findIndex(item => item.name === field.name);
+     const columnIndex = this.selectedColumnFields.findIndex(item => item.name === field.name);
+     return (rowIndex === -1) && (columnIndex === -1);
+
+    },
     changeMetricPlacement() {
       this.metricPlacement = this.metricPlacement === "COLUMNS" ? "ROWS" : "COLUMNS";
       this.getCube();
@@ -338,7 +377,7 @@ export default {
     addColumn(field) {
       this.selectedColumnFields.push(field);
       this.selectedColumnFields.sort((a, b) => a.ordinal - b.ordinal);
-      //console.log(this.selectedMetrixFields);
+      //console.log(this.selectedMetricsFields);
       this.contextMenu.visible = false;
 
       const fieldIndex = this.fields.findIndex(item => item.name === field.name);
@@ -366,7 +405,7 @@ export default {
       this.contextMetricOperationMenu.visible = false;
     },
     setMetricOperation(field, operation) {
-      this.selectedMetrixFields.push([field, operation]);
+      this.selectedMetricsFields.push([field, operation]);
       this.hideMetricMenu();
       this.getCube();
     },
@@ -390,6 +429,10 @@ export default {
       this.selectedRowFields.splice(index, 1);
       this.getCube();
     },
+    closeMetrixField(index) {
+      this.selectedMetricsFields.splice(index, 1);
+      this.getCube();
+    },
     showFilterMenu() {
       this.contextFilterOperationTypeMenu.visible = true;
     },
@@ -398,7 +441,6 @@ export default {
     },
     setFilterOperation(operation) {
       this.filter.filterType = operation;
-      this.hideFilterMenu();
     },
     changeOperationType() {
       this.filterGroup.operationType = this.filterGroup.operationType === "AND" ? "OR" : "AND";
@@ -428,15 +470,20 @@ export default {
     },
     applyFilter(field, isColumn) {
       if (isColumn) {
-        const fieldIndex = this.selectedColumnFields.findIndex(item => item.name === field.name);
-        if (fieldIndex !== -1) {
-          this.filter.values = this.tableData.columns.map(column => column[fieldIndex]);
-        }
+        this.filter.values.push(this.valueForFilter);
         this.filter.field.fieldId = field.id;
         this.filterGroup.filters.push(this.filter);
         this.filterGroup.allFields.push({fieldId: field.id, fieldType: "REPORT_FIELD"});
       }
       this.contextFilterMenu.visible = false;
+      this.getCube();
+    },
+    changeColumnSort() {
+      this.columnSort = this.columnSort === "Ascending" ? "Descending" : "Ascending";
+      this.getCube();
+    },
+    changeRowSort() {
+      this.rowSort = this.rowSort === "Ascending" ? "Descending" : "Ascending";
       this.getCube();
     }
   }
@@ -446,6 +493,19 @@ export default {
 <style>
 .field-names {
   display: flex;
+}
+
+button {
+  background-color: rgb(255, 255, 255);
+    border: 3px solid #c03030;
+    color: rgb(0, 0, 0);
+    padding: 10px 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    border-radius: 15px;
+    margin-right: 2px;
 }
 
 body {
@@ -464,10 +524,12 @@ body {
 
 .context-menu {
   position: absolute;
-  background-color: #fff;
-  border: 1px solid #ccc;
+  background-color: rgb(255, 255, 255);
+  border: 3px solid #c03030;
+  color: rgb(0, 0, 0);
   padding: 10px;
   z-index: 9999;
+  border-radius: 15px;
 }
 
 .context-menu div {
@@ -476,12 +538,14 @@ body {
 }
 
 table {
+  background-color: rgb(255, 255, 255);
+  border: 3px solid #c03030;
+  color: rgb(0, 0, 0);
   border-collapse: collapse;
   margin-top: 10px;
   table-layout: fixed;
   empty-cells: hide;
 }
-
 th, td {
   border: 1px solid #ccc;
   padding: 5px;
@@ -490,12 +554,14 @@ th, td {
 }
 
 th {
-  background-color: lightgray;
+  background-color: rgb(185, 177, 177);
+  color: rgb(0, 0, 0);
   font-weight: bold;
   width: 100px;
 }
 
 td {
+  background-color: rgb(255, 255, 255);
   border: 1px solid #ccc;
   padding: 5px;
   text-align: center;
@@ -507,24 +573,27 @@ tr td:first-child {
 }
 
 .field-name {
+  background-color: rgb(255, 255, 255);
+  border: 2px solid #c03030;
+  color: rgb(0, 0, 0);
   flex: 0 0 125px;
   height: 100px;
   text-align: center;
-  border: 1px solid #ccc;
   margin: 5px;
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
+  border-radius: 10px;
 }
 
 .close-icon {
   position: absolute;
-  top: 5px; /* Подстройте положение по вертикали по вашему усмотрению */
-  right: 5px; /* Подстройте положение по горизонтали по вашему усмотрению */
+  top: 5px;
+  right: 5px;
   cursor: pointer;
-  font-size: 18px; /* Подстройте размер шрифта по вашему усмотрению */
-  color: red; /* Цвет иконки закрытия */
+  font-size: 18px;
+  color: red;
 }
 
 </style>
